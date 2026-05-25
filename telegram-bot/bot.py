@@ -463,7 +463,7 @@ def web_dashboard():
     free_c = sum(1 for u in active_users if get_tier(u)=="free")
     prem_c = sum(1 for u in active_users if get_tier(u)=="premium")
     own_c = sum(1 for u in active_users if get_tier(u)=="owner")
-    cpu = psutil.cpu_percent(interval=0.5); mem = psutil.virtual_memory()
+    cpu = psutil.cpu_percent(interval=0.05); mem = psutil.virtual_memory()
     ram_u = round(mem.used/1024**3,1); ram_t = round(mem.total/1024**3,1); ram_p = mem.percent
     user_rows = ""
     for uid in sorted(active_users)[:20]:
@@ -682,16 +682,18 @@ def lb_mk():
 
 # ====== SCRIPT RUNNER ======
 MODS = {
-    "telebot":"pyTelegramBotAPI","telegram":"python-telegram-bot","aiogram":"aiogram",
+    "telebot":"pyTelegramBotAPI","telegram":"python-telegram-bot",
+    "aiogram":"aiogram==2.25.1","aiogram.contrib":"aiogram==2.25.1",
     "pyrogram":"pyrogram","telethon":"telethon","requests":"requests","flask":"Flask",
     "psutil":"psutil","qrcode":"qrcode","pillow":"Pillow","cryptography":"cryptography",
     "bs4":"beautifulsoup4","pandas":"pandas","numpy":"numpy"
 }
 
 def install_mod(name, msg):
-    pkg = MODS.get(name.lower(), name)
+    root = name.split(".")[0]
+    pkg = MODS.get(root.lower(), root)
     try:
-        bot.reply_to(msg, B(f"🐍 Installing `{name}`..."))
+        bot.reply_to(msg, B(f"🐍 Installing `{root}`..."))
         r = subprocess.run([sys.executable,"-m","pip","install",pkg,"--quiet"], capture_output=True, text=True)
         if r.returncode==0:
             bot.reply_to(msg, B(f"✅ `{pkg}` installed.")); return True
@@ -973,7 +975,9 @@ def handle_file(msg):
         fi = bot.get_file(doc.file_id); dl = bot.download_file(fi.file_path)
         folder = get_folder(uid); fp = os.path.join(folder, doc.file_name)
         with open(fp,"wb") as f: f.write(dl)
-        if ext==".zip": handle_zip(dl, doc.file_name, uid, folder, msg)
+        if ext==".zip":
+            save_file(uid, doc.file_name, "zip")
+            handle_zip(dl, doc.file_name, uid, folder, msg)
         elif ext==".py":
             save_file(uid, doc.file_name, "py")
             threading.Thread(target=run_py, args=(fp,uid,folder,doc.file_name,msg)).start()
