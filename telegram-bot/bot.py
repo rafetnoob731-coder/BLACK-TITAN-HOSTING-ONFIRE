@@ -496,7 +496,7 @@ USER_PAGE = """<!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Users - BLACK TITAN</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<style>body{background:#0a0a0f;color:#e0e0e0}.card{background:#12121a;border:1px solid #2a2a3a;border-radius:12px}.table{color:#e0e0e0}</style></head><body>
+<style>body{{background:#0a0a0f;color:#e0e0e0}}.card{{background:#12121a;border:1px solid #2a2a3a;border-radius:12px}}.table{{color:#e0e0e0}}</style></head><body>
 <div class="container p-4">
 <h3 class="mb-4"><i class="bi bi-people me-2"></i>Users</h3>
 <div class="card p-3"><table class="table table-dark"><thead><tr>
@@ -521,7 +521,7 @@ FILES_PAGE = """<!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Files - BLACK TITAN</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<style>body{background:#0a0a0f;color:#e0e0e0}.card{background:#12121a;border:1px solid #2a2a3a;border-radius:12px}.table{color:#e0e0e0}</style></head><body>
+<style>body{{background:#0a0a0f;color:#e0e0e0}}.card{{background:#12121a;border:1px solid #2a2a3a;border-radius:12px}}.table{{color:#e0e0e0}}</style></head><body>
 <div class="container p-4">
 <h3 class="mb-4"><i class="bi bi-file-code me-2"></i>Files</h3>
 <div class="card p-3"><table class="table table-dark"><thead><tr>
@@ -545,7 +545,7 @@ SCRIPTS_PAGE = """<!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Scripts - BLACK TITAN</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<style>body{background:#0a0a0f;color:#e0e0e0}.card{background:#12121a;border:1px solid #2a2a3a;border-radius:12px}.table{color:#e0e0e0}</style></head><body>
+<style>body{{background:#0a0a0f;color:#e0e0e0}}.card{{background:#12121a;border:1px solid #2a2a3a;border-radius:12px}}.table{{color:#e0e0e0}}</style></head><body>
 <div class="container p-4">
 <h3 class="mb-4"><i class="bi bi-terminal me-2"></i>Running Scripts</h3>
 <div class="card p-3"><table class="table table-dark"><thead><tr>
@@ -567,7 +567,7 @@ REFS_PAGE = """<!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Referrals - BLACK TITAN</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<style>body{background:#0a0a0f;color:#e0e0e0}.card{background:#12121a;border:1px solid #2a2a3a;border-radius:12px}.table{color:#e0e0e0}</style></head><body>
+<style>body{{background:#0a0a0f;color:#e0e0e0}}.card{{background:#12121a;border:1px solid #2a2a3a;border-radius:12px}}.table{{color:#e0e0e0}}</style></head><body>
 <div class="container p-4">
 <h3 class="mb-4"><i class="bi bi-link-45deg me-2"></i>Referral Leaderboard</h3>
 <div class="card p-3"><table class="table table-dark"><thead><tr>
