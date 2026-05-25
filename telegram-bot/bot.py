@@ -1647,5 +1647,9 @@ if __name__=="__main__":
     print("="*50)
     threading.Thread(target=lambda: bot.send_message(OWNER_ID, B("🚀 BLACK TITAN HOSTING BOT STARTED! ✅"))).start()
     while True:
-        try: bot.infinity_polling(timeout=60, long_polling_timeout=30)
-        except: time.sleep(60)
+        try: bot.polling(timeout=60, long_polling_timeout=30, non_stop=False)
+        except Exception as e:
+            if "409" in str(e): time.sleep(30)
+            elif "ReadTimeout" in type(e).__name__: time.sleep(5)
+            elif "ConnectionError" in type(e).__name__: time.sleep(15)
+            else: time.sleep(10)
