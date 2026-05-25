@@ -702,7 +702,7 @@ def lb_mk():
 # ====== SCRIPT RUNNER ======
 MODS = {
     "telebot":"pyTelegramBotAPI","telegram":"python-telegram-bot",
-    "aiogram":"aiogram==2.25.1","aiogram.contrib":"aiogram==2.25.1",
+    "aiogram":"aiogram","aiogram.contrib":"aiogram",
     "pyrogram":"pyrogram","telethon":"telethon","requests":"requests","flask":"Flask",
     "psutil":"psutil","qrcode":"qrcode","pillow":"Pillow","cryptography":"cryptography",
     "bs4":"beautifulsoup4","pandas":"pandas","numpy":"numpy"
@@ -717,7 +717,12 @@ def install_mod(name, msg):
         if r.returncode==0:
             bot.reply_to(msg, B(f"✅ `{pkg}` installed.")); return True
         else:
-            bot.reply_to(msg, B(f"❌ Failed `{pkg}`.")); return False
+            err = r.stderr[:150] if r.stderr else r.stdout[:150]
+            if "aiogram.contrib" in name:
+                bot.reply_to(msg, B("❌ `aiogram.contrib` needs aiogram v2 which requires Python<3.13. Install Python 3.11 or use aiogram v3 API."))
+            else:
+                bot.reply_to(msg, B(f"❌ Failed `{pkg}`.\n{err}"))
+            return False
     except Exception as e:
         bot.reply_to(msg, B(f"❌ {e}")); return False
 
