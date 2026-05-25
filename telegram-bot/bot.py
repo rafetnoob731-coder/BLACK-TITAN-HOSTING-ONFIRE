@@ -713,13 +713,14 @@ def install_mod(name, msg):
     pkg = MODS.get(root.lower(), root)
     try:
         bot.reply_to(msg, B(f"🐍 Installing `{root}`..."))
-        r = _pip_install(pkg)
+        env_override = {**os.environ, "AIOHTTP_NO_EXTENSIONS": "1"} if root == "aiogram" else None
+        r = subprocess.run(_pip_base + [pkg], capture_output=True, text=True, env=env_override)
         if r.returncode==0:
             bot.reply_to(msg, B(f"✅ `{pkg}` installed.")); return True
         else:
-            err = r.stderr[:150] if r.stderr else r.stdout[:150]
-            if "aiogram.contrib" in name:
-                bot.reply_to(msg, B("❌ `aiogram.contrib` needs aiogram v2 which requires Python<3.13. Install Python 3.11 or use aiogram v3 API."))
+            err = r.stderr[:200] if r.stderr else r.stdout[:200]
+            if "aiogram" in name.lower() and ("aiohttp" in err or "build" in err):
+                bot.reply_to(msg, B("❌ Python 3.14 broke aiohttp C extensions. Try manual: `pip3 install --break-system-packages aiogram==2.25.1`"))
             else:
                 bot.reply_to(msg, B(f"❌ Failed `{pkg}`.\n{err}"))
             return False
