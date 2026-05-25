@@ -5,12 +5,19 @@
 """
 
 import subprocess, sys, os
-for mod in ["telebot","psutil","requests","flask","qrcode","Pillow","cryptography"]:
+_pip_base = [sys.executable,"-m","pip","install","--quiet"]
+try: subprocess.run([sys.executable,"-m","pip","install","--dry-run","setuptools"], capture_output=True)
+except: _pip_base.append("--break-system-packages")
+def _pip_install(*args):
+    return subprocess.run(_pip_base + list(args), capture_output=True, text=True)
+_MOD_MAP = {"PIL":"Pillow","telebot":"pyTelegramBotAPI","flask":"Flask"}
+for mod in ["telebot","psutil","requests","flask","qrcode","PIL","cryptography"]:
     try:
         __import__(mod)
     except ModuleNotFoundError:
-        print(f"Installing {mod}...")
-        subprocess.check_call([sys.executable,"-m","pip","install",mod,"--quiet"])
+        pkg = _MOD_MAP.get(mod, mod)
+        print(f"Installing {pkg}...")
+        _pip_install(pkg)
 
 import telebot, zipfile, tempfile, shutil
 from telebot import types
@@ -706,7 +713,7 @@ def install_mod(name, msg):
     pkg = MODS.get(root.lower(), root)
     try:
         bot.reply_to(msg, B(f"🐍 Installing `{root}`..."))
-        r = subprocess.run([sys.executable,"-m","pip","install",pkg,"--quiet"], capture_output=True, text=True)
+        r = _pip_install(pkg)
         if r.returncode==0:
             bot.reply_to(msg, B(f"✅ `{pkg}` installed.")); return True
         else:
@@ -783,7 +790,7 @@ def handle_zip(content, fn, uid, folder, msg, project=""):
         req = _find_req_txt(td)
         if req:
             bot.reply_to(msg, B("🐍 Installing requirements.txt..."))
-            r = subprocess.run([sys.executable,"-m","pip","install","-r",req], capture_output=True, text=True)
+            r = _pip_install("-r", req)
             if r.returncode==0: bot.reply_to(msg, B("✅ Dependencies installed."))
             else: bot.reply_to(msg, B(f"⚠️ Some deps failed to install. Try without packages needing C build tools (aiohttp, bcrypt, etc)."))
         # collect all files recursively before copying
