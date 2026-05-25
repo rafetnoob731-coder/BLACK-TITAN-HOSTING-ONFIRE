@@ -1,0 +1,6 @@
+bt_data/
+bt_uploads/
+__pycache__/
+*.pyc
+.env
+*.log
