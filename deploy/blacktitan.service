@@ -1,0 +1,21 @@
+[Unit]
+Description=BLACK TITAN HOSTING BOT V4.0
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/blacktitan
+ExecStartPre=/opt/blacktitan/deploy/prestart.sh
+ExecStart=/opt/blacktitan/venv/bin/python3 /opt/blacktitan/telegram-bot/bot.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

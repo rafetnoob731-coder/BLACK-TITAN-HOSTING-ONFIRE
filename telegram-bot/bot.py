@@ -1649,7 +1649,14 @@ if __name__=="__main__":
     while True:
         try: bot.polling(timeout=60, long_polling_timeout=30, non_stop=False)
         except Exception as e:
-            if "409" in str(e): time.sleep(30)
+            em = str(e)
+            if "409" in em:
+                logger.warning("409 Conflict - releasing old connection...")
+                try: requests.get(f"https://api.telegram.org/bot{TOKEN}/deleteWebhook?drop_pending_updates=true")
+                except: pass
+                try: requests.get(f"https://api.telegram.org/bot{TOKEN}/close")
+                except: pass
+                time.sleep(15)
             elif "ReadTimeout" in type(e).__name__: time.sleep(5)
             elif "ConnectionError" in type(e).__name__: time.sleep(15)
             else: time.sleep(10)
