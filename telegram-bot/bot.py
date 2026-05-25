@@ -738,6 +738,10 @@ def run_py(script_path, uid, folder, fn, msg):
                 m = re.search(r"ModuleNotFoundError: No module named '(.+?)'", err)
                 if m and install_mod(m.group(1), msg):
                     time.sleep(2); run_py(script_path, uid, folder, fn, msg); return
+                me = re.search(r"ImportError: cannot import name '(.+?)' from '(.+?)'", err)
+                if me:
+                    bot.reply_to(msg, B(f"❌ `{me.group(1)}` was removed from `{me.group(2)}`. Fix your script."))
+                    return
         except subprocess.TimeoutExpired:
             if proc: proc.kill()
         lf = open(os.path.join(folder,f"{os.path.splitext(fn)[0]}.log"),"w",encoding="utf-8",errors="ignore")
@@ -1658,18 +1662,20 @@ if __name__=="__main__":
     print(f"🛡️ Admins: {len(admin_ids)}")
     print(f"👥 Users: {len(active_users)}")
     print("="*50)
+    try: os.waitpid(-1, os.WNOHANG)
+    except ChildProcessError: pass
     threading.Thread(target=lambda: bot.send_message(OWNER_ID, B("🚀 BLACK TITAN HOSTING BOT STARTED! ✅"))).start()
     while True:
-        try: bot.polling(timeout=60, long_polling_timeout=30, non_stop=False)
+        try: bot.polling(timeout=30, long_polling_timeout=15, non_stop=False)
         except Exception as e:
             em = str(e)
             if "409" in em:
-                logger.warning("409 Conflict - releasing old connection...")
-                try: requests.get(f"https://api.telegram.org/bot{TOKEN}/deleteWebhook?drop_pending_updates=true")
+                logger.warning("409 Conflict - releasing...")
+                try: requests.get(f"https://api.telegram.org/bot{TOKEN}/deleteWebhook?drop_pending_updates=true", timeout=5)
                 except: pass
-                try: requests.get(f"https://api.telegram.org/bot{TOKEN}/close")
+                try: requests.get(f"https://api.telegram.org/bot{TOKEN}/close", timeout=5)
                 except: pass
-                time.sleep(15)
-            elif "ReadTimeout" in type(e).__name__: time.sleep(5)
-            elif "ConnectionError" in type(e).__name__: time.sleep(15)
-            else: time.sleep(10)
+                time.sleep(3)
+            elif "ReadTimeout" in type(e).__name__: time.sleep(1)
+            elif "ConnectionError" in type(e).__name__: time.sleep(3)
+            else: time.sleep(2)
