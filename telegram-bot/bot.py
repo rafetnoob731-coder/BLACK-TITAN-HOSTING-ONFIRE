@@ -785,7 +785,7 @@ def handle_zip(content, fn, uid, folder, msg, project=""):
             bot.reply_to(msg, B("🐍 Installing requirements.txt..."))
             r = subprocess.run([sys.executable,"-m","pip","install","-r",req], capture_output=True, text=True)
             if r.returncode==0: bot.reply_to(msg, B("✅ Dependencies installed."))
-            else: bot.reply_to(msg, B(f"⚠️ pip issue:\n{r.stderr[:200]}"))
+            else: bot.reply_to(msg, B(f"⚠️ Some deps failed (C build tools missing on Render). Try without aiohttp/bcrypt."))
         # collect all files recursively before copying
         all_files = []
         for dirpath, _, fns in os.walk(td):
