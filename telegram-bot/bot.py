@@ -773,8 +773,28 @@ def handle_zip(content, fn, uid, folder, msg, project=""):
         with open(os.path.join(td,fn),"wb") as f: f.write(content)
         with zipfile.ZipFile(os.path.join(td,fn)) as z: z.extractall(td)
         files = os.listdir(td)
-        py = [f for f in files if f.endswith(".py")]
-        js = [f for f in files if f.endswith(".js")]
+        # install requirements.txt if present
+        if "requirements.txt" in files:
+            bot.reply_to(msg, B("🐍 Installing requirements.txt..."))
+            subprocess.run([sys.executable,"-m","pip","install","-r",os.path.join(td,"requirements.txt"),"--quiet"],
+                         capture_output=True, text=True)
+        # copy all files to project folder
+        for item in files:
+            s=os.path.join(td,item); d=os.path.join(folder,item)
+            if os.path.isdir(s): shutil.copytree(s,d,dirs_exist_ok=True)
+            else: shutil.copy2(s,d)
+        # save all .py and .js files
+        saved = []
+        for f in files:
+            if f.endswith(".py"):
+                save_file(uid, f, "py", project)
+                saved.append(f)
+            elif f.endswith(".js"):
+                save_file(uid, f, "js", project)
+                saved.append(f)
+        # find and auto-start main file
+        py = [f for f in saved if f.endswith(".py")]
+        js = [f for f in saved if f.endswith(".js")]
         main = None; ft = None
         for n in ["main.py","bot.py","app.py"]:
             if n in py: main=n; ft="py"; break
@@ -783,12 +803,9 @@ def handle_zip(content, fn, uid, folder, msg, project=""):
             for n in ["index.js","main.js","bot.js"]:
                 if n in js: main=n; ft="js"; break
             if not main and js: main=js[0]; ft="js"
-        if not main: bot.reply_to(msg, B("❌ No .py/.js in ZIP.")); return
-        for item in os.listdir(td):
-            s=os.path.join(td,item); d=os.path.join(folder,item)
-            if os.path.isdir(s): shutil.copytree(s,d,dirs_exist_ok=True)
-            else: shutil.copy2(s,d)
-        save_file(uid,main,ft,project)
+        if not main:
+            bot.reply_to(msg, B(f"✅ Extracted {len(saved)} file(s). Tap to start one."))
+            return
         fp = os.path.join(folder,main)
         if ft=="py": threading.Thread(target=run_py, args=(fp,uid,folder,main,msg)).start()
         else: threading.Thread(target=run_js, args=(fp,uid,folder,main,msg)).start()
@@ -1043,7 +1060,6 @@ def handle_file(msg):
         folder = get_project_folder(uid, proj); fp = os.path.join(folder, doc.file_name)
         with open(fp,"wb") as f: f.write(dl)
         if ext==".zip":
-            save_file(uid, doc.file_name, "zip", proj)
             handle_zip(dl, doc.file_name, uid, folder, msg, proj)
         elif ext==".py":
             save_file(uid, doc.file_name, "py", proj)
