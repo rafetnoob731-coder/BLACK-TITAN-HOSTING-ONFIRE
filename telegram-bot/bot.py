@@ -785,7 +785,7 @@ def handle_zip(content, fn, uid, folder, msg, project=""):
             bot.reply_to(msg, B("🐍 Installing requirements.txt..."))
             r = subprocess.run([sys.executable,"-m","pip","install","-r",req], capture_output=True, text=True)
             if r.returncode==0: bot.reply_to(msg, B("✅ Dependencies installed."))
-            else: bot.reply_to(msg, B(f"⚠️ Some deps failed (C build tools missing on Render). Try without aiohttp/bcrypt."))
+            else: bot.reply_to(msg, B(f"⚠️ Some deps failed to install. Try without packages needing C build tools (aiohttp, bcrypt, etc)."))
         # collect all files recursively before copying
         all_files = []
         for dirpath, _, fns in os.walk(td):
@@ -853,7 +853,7 @@ def del_project(uid, project):
     if uid in user_files:
         user_files[uid] = [x for x in user_files[uid] if x[0] != project]
 
-@bot.message_handler(func=lambda m: user_state.get(m.from_user.id,{}).get("action")=="await_project" and m.text)
+@bot.message_handler(func=lambda m: user_state.get(m.from_user.id,{}).get("action")=="await_project" and m.text and not m.text.startswith("/"))
 def handle_project_name(msg):
     uid = msg.from_user.id; pn = msg.text.strip().replace("/","_").replace(" ","_")[:30]
     if not pn: bot.reply_to(msg, B("⚠️ Invalid project name.")); return
