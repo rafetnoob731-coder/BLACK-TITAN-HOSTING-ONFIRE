@@ -389,20 +389,199 @@ def rem_sub(uid):
         finally: conn.close()
 
 # Flask keep-alive
-flask_app = Flask("")
+flask_app = Flask(__name__)
+
+PAGE_HTML = """<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BLACK TITAN HOSTING</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+body{{background:#0a0a0f;color:#e0e0e0;font-family:'Segoe UI',sans-serif}}
+.sidebar{{background:#12121a;min-height:100vh;border-right:1px solid #2a2a3a}}
+.sidebar .nav-link{{color:#aaa;padding:12px 20px;border-radius:8px;margin:2px 8px}}
+.sidebar .nav-link:hover,.sidebar .nav-link.active{{background:#1e1e30;color:#fff}}
+.card{{background:#12121a;border:1px solid #2a2a3a;border-radius:12px}}
+.stat-card{{text-align:center;padding:20px}}
+.stat-card .icon{{font-size:2rem;margin-bottom:8px}}
+.stat-card .value{{font-size:1.8rem;font-weight:700;color:#fff}}
+.stat-card .label{{color:#888;font-size:.85rem}}
+.uptime-dot{{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}}
+.table{{color:#e0e0e0;font-size:.9rem}}
+.table th{{border-color:#2a2a3a;color:#888}}
+.table td{{border-color:#2a2a3a;vertical-align:middle}}
+.badge-tg{{background:#1e1e30;color:#aaa;padding:2px 10px;border-radius:20px;font-size:.75rem}}
+footer{{color:#555;text-align:center;padding:20px;font-size:.8rem}}
+</style></head><body>
+<div class="container-fluid"><div class="row">
+<div class="col-md-2 sidebar p-3">
+<h4 class="text-white mb-4 mt-2"><i class="bi bi-shield-shaded me-2"></i>BLACK TITAN</h4>
+<nav class="nav flex-column">
+<a class="nav-link active" href="/"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a>
+<a class="nav-link" href="/users"><i class="bi bi-people me-2"></i>Users</a>
+<a class="nav-link" href="/files"><i class="bi bi-file-code me-2"></i>Files</a>
+<a class="nav-link" href="/scripts"><i class="bi bi-terminal me-2"></i>Scripts</a>
+<a class="nav-link" href="/referrals"><i class="bi bi-link-45deg me-2"></i>Referrals</a>
+</nav></div>
+<div class="col-md-10 p-4">
+<div class="d-flex justify-content-between align-items-center mb-4">
+<h3><i class="bi bi-speedometer2 me-2"></i>Management Dashboard</h3>
+<span class="badge-tg"><i class="bi bi-telegram me-1"></i>{BOT_USERNAME}</span>
+</div>
+<div class="row g-3 mb-4">
+<div class="col-md-3"><div class="card stat-card">
+<div class="icon">👥</div><div class="value">{tu}</div><div class="label">Total Users</div></div></div>
+<div class="col-md-3"><div class="card stat-card">
+<div class="icon">📁</div><div class="value">{tf}</div><div class="label">Files</div></div></div>
+<div class="col-md-3"><div class="card stat-card">
+<div class="icon">🟢</div><div class="value">{rs}</div><div class="label">Running</div></div></div>
+<div class="col-md-3"><div class="card stat-card">
+<div class="icon">💾</div><div class="value">{ruc}</div><div class="label">Recovery</div></div></div>
+</div>
+<div class="row g-3 mb-4">
+<div class="col-md-4"><div class="card p-3"><h6><i class="bi bi-tag me-2"></i>Tier Distribution</h6>
+<div class="mt-2"><div>FREE: <strong>{free_c}</strong></div><div>PREMIUM: <strong>{prem_c}</strong></div><div>OWNER: <strong>{own_c}</strong></div></div></div></div>
+<div class="col-md-4"><div class="card p-3"><h6><i class="bi bi-link me-2"></i>Referral Stats</h6>
+<div class="mt-2"><div>Referring: <strong>{ru}</strong></div><div>Auto-Restart: <strong>{are}</strong></div><div>Top: <strong>{top_ref} refs</strong></div></div></div></div>
+<div class="col-md-4"><div class="card p-3"><h6><i class="bi bi-cpu me-2"></i>System</h6>
+<div class="mt-2"><div>CPU: <strong>{cpu}%</strong></div><div>RAM: <strong>{ram_p}% ({ram_u}/{ram_t}GB)</strong></div><div>Bot: <span class="uptime-dot" style="background:{'#2ecc71' if not bot_locked else '#e74c3c'}"></span>{'Unlocked' if not bot_locked else 'Locked'}</div></div></div></div>
+</div>
+<div class="card p-3"><h6><i class="bi bi-activity me-2"></i>Active Users</h6>
+<div class="table-responsive mt-2"><table class="table table-dark table-hover"><thead><tr>
+<th>ID</th><th>Username</th><th>Tier</th><th>Files</th><th>Running</th><th>Referrals</th></tr></thead><tbody>{user_rows}</tbody></table></div></div>
+<footer>BLACK TITAN HOSTING BOT V4.0 | <a href="https://t.me/{BOT_USERNAME.replace('@','')}" class="text-white-50">@{BOT_USERNAME.replace('@','')}</a></footer>
+</div></div></div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script></body></html>"""
 
 @flask_app.route("/")
-def home(): return "🤖 BLACK TITAN HOSTING BOT"
+def web_dashboard():
+    tu = len(active_users); tf = sum(len(f) for f in user_files.values())
+    rs = sum(1 for k,v in bot_scripts.items() if is_running(v["uid"],v["fn"]))
+    ruc = rec.count(); ru = sum(1 for u in active_users if refsys.count(u)>0)
+    are = sum(1 for u in active_users if refsys.is_auto(u))
+    top = refsys.top(1); top_ref = top[0]["cnt"] if top else 0
+    free_c = sum(1 for u in active_users if get_tier(u)=="free")
+    prem_c = sum(1 for u in active_users if get_tier(u)=="premium")
+    own_c = sum(1 for u in active_users if get_tier(u)=="owner")
+    cpu = psutil.cpu_percent(interval=0.5); mem = psutil.virtual_memory()
+    ram_u = round(mem.used/1024**3,1); ram_t = round(mem.total/1024**3,1); ram_p = mem.percent
+    user_rows = ""
+    for uid in sorted(active_users)[:20]:
+        try:
+            un = bot.get_chat(uid).username or str(uid)
+        except: un = str(uid)
+        t = get_tier(uid); fc = file_count(uid); rc = refsys.count(uid)
+        rn = sum(1 for f in user_files.get(uid,[]) if is_running(uid,f[0]))
+        user_rows += f"<tr><td><code>{uid}</code></td><td>{un}</td><td>{t}</td><td>{fc}</td><td>{rn}</td><td>{rc}</td></tr>"
+    if not user_rows: user_rows = "<tr><td colspan='6' class='text-muted'>No users</td></tr>"
+    return PAGE_HTML.format(tu=tu,tf=tf,rs=rs,ruc=ruc,ru=ru,are=are,top_ref=top_ref,
+            free_c=free_c,prem_c=prem_c,own_c=own_c,cpu=cpu,ram_u=ram_u,ram_t=ram_t,ram_p=ram_p,
+            bot_locked=bot_locked,user_rows=user_rows,BOT_USERNAME=BOT_USERNAME)
 
 @flask_app.route("/health")
 def health():
-    return json.dumps({"status":"running","users":len(active_users),"scripts":len(bot_scripts)})
+    return json.dumps({"status":"running","users":len(active_users),"scripts":len(bot_scripts),"uptime":str(datetime.now()-startup_time)})
+
+USER_PAGE = """<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Users - BLACK TITAN</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>body{background:#0a0a0f;color:#e0e0e0}.card{background:#12121a;border:1px solid #2a2a3a;border-radius:12px}.table{color:#e0e0e0}</style></head><body>
+<div class="container p-4">
+<h3 class="mb-4"><i class="bi bi-people me-2"></i>Users</h3>
+<div class="card p-3"><table class="table table-dark"><thead><tr>
+<th>ID</th><th>Username</th><th>Tier</th><th>Files</th><th>Running</th><th>Referrals</th><th>Auto-Restart</th></tr></thead><tbody>{rows}</tbody></table></div>
+<a href="/" class="btn btn-outline-light mt-3">Back</a>
+</div></body></html>"""
+
+@flask_app.route("/users")
+def web_users():
+    rows = ""
+    for uid in sorted(active_users):
+        try: un = bot.get_chat(uid).username or str(uid)
+        except: un = str(uid)
+        t = get_tier(uid); fc = file_count(uid); rc = refsys.count(uid)
+        rn = sum(1 for f in user_files.get(uid,[]) if is_running(uid,f[0]))
+        ar = "✅" if refsys.is_auto(uid) else "❌"
+        rows += f"<tr><td><code>{uid}</code></td><td>{un}</td><td>{t}</td><td>{fc}</td><td>{rn}</td><td>{rc}</td><td>{ar}</td></tr>"
+    if not rows: rows = "<tr><td colspan='7' class='text-muted'>No users</td></tr>"
+    return USER_PAGE.format(rows=rows)
+
+FILES_PAGE = """<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Files - BLACK TITAN</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>body{background:#0a0a0f;color:#e0e0e0}.card{background:#12121a;border:1px solid #2a2a3a;border-radius:12px}.table{color:#e0e0e0}</style></head><body>
+<div class="container p-4">
+<h3 class="mb-4"><i class="bi bi-file-code me-2"></i>Files</h3>
+<div class="card p-3"><table class="table table-dark"><thead><tr>
+<th>User ID</th><th>File Name</th><th>Type</th><th>Status</th></tr></thead><tbody>{rows}</tbody></table></div>
+<a href="/" class="btn btn-outline-light mt-3">Back</a>
+</div></body></html>"""
+
+@flask_app.route("/files")
+def web_files():
+    rows = ""
+    for uid, files in user_files.items():
+        for fn, ft in files:
+            st = "🟢 Running" if is_running(uid,fn) else "🔴 Stopped"
+            rows += f"<tr><td><code>{uid}</code></td><td>{fn}</td><td>{ft}</td><td>{st}</td></tr>"
+    if not rows: rows = "<tr><td colspan='4' class='text-muted'>No files</td></tr>"
+    return FILES_PAGE.format(rows=rows)
+
+SCRIPTS_PAGE = """<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scripts - BLACK TITAN</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>body{background:#0a0a0f;color:#e0e0e0}.card{background:#12121a;border:1px solid #2a2a3a;border-radius:12px}.table{color:#e0e0e0}</style></head><body>
+<div class="container p-4">
+<h3 class="mb-4"><i class="bi bi-terminal me-2"></i>Running Scripts</h3>
+<div class="card p-3"><table class="table table-dark"><thead><tr>
+<th>User ID</th><th>File</th><th>Type</th><th>Started</th><th>PID</th></tr></thead><tbody>{rows}</tbody></table></div>
+<a href="/" class="btn btn-outline-light mt-3">Back</a>
+</div></body></html>"""
+
+@flask_app.route("/scripts")
+def web_scripts():
+    rows = ""
+    for k, v in bot_scripts.items():
+        uid = v["uid"]; fn = v["fn"]; tp = v["tp"]; pid = v["process"].pid if v.get("process") else "?"
+        st = v.get("st","")
+        rows += f"<tr><td><code>{uid}</code></td><td>{fn}</td><td>{tp}</td><td>{st}</td><td>{pid}</td></tr>"
+    if not rows: rows = "<tr><td colspan='5' class='text-muted'>No running scripts</td></tr>"
+    return SCRIPTS_PAGE.format(rows=rows)
+
+REFS_PAGE = """<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Referrals - BLACK TITAN</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>body{background:#0a0a0f;color:#e0e0e0}.card{background:#12121a;border:1px solid #2a2a3a;border-radius:12px}.table{color:#e0e0e0}</style></head><body>
+<div class="container p-4">
+<h3 class="mb-4"><i class="bi bi-link-45deg me-2"></i>Referral Leaderboard</h3>
+<div class="card p-3"><table class="table table-dark"><thead><tr>
+<th>#</th><th>User</th><th>Referrals</th><th>Auto-Restart</th></tr></thead><tbody>{rows}</tbody></table></div>
+<a href="/" class="btn btn-outline-light mt-3">Back</a>
+</div></body></html>"""
+
+@flask_app.route("/referrals")
+def web_refs():
+    top = refsys.top(50); rows = ""
+    medals = ["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
+    for i, r in enumerate(top, 1):
+        un = r["un"] or f"User {r['uid']}"
+        m = medals[i-1] if i<=10 else f"{i}."
+        ar = "✅" if r["ar"] else "❌"
+        rows += f"<tr><td>{m}</td><td>{un}</td><td>{r['cnt']}</td><td>{ar}</td></tr>"
+    if not rows: rows = "<tr><td colspan='4' class='text-muted'>No referrals yet</td></tr>"
+    return REFS_PAGE.format(rows=rows)
+
+startup_time = datetime.now()
 
 def run_flask():
     flask_app.run(host="0.0.0.0", port=PORT, debug=False, use_reloader=False)
 
 Thread(target=run_flask, daemon=True).start()
-print("✅ Keep-alive started.")
+print("✅ Management Dashboard started.")
 
 # ====== BUTTONS ======
 def main_markup(uid):
