@@ -307,7 +307,9 @@ def init_db():
         conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         c = conn.cursor()
         c.execute("CREATE TABLE IF NOT EXISTS subs(uid INTEGER PRIMARY KEY,exp TEXT,tier TEXT,created TEXT)")
-        c.execute("CREATE TABLE IF NOT EXISTS uf(uid INTEGER,fn TEXT,ft TEXT,up TEXT,PRIMARY KEY(uid,fn))")
+        c.execute("CREATE TABLE IF NOT EXISTS uf(uid INTEGER,fn TEXT,ft TEXT,project TEXT,up TEXT,PRIMARY KEY(uid,fn))")
+        try: c.execute("ALTER TABLE uf ADD COLUMN project TEXT DEFAULT ''")
+        except: pass
         c.execute("CREATE TABLE IF NOT EXISTS au(uid INTEGER PRIMARY KEY,un TEXT,fj TEXT,ls TEXT)")
         c.execute("CREATE TABLE IF NOT EXISTS adm(uid INTEGER PRIMARY KEY,ab INTEGER,at TEXT)")
         c.execute("INSERT OR IGNORE INTO adm VALUES(?,?,?)", (OWNER_ID, OWNER_ID, datetime.now().isoformat()))
@@ -322,8 +324,13 @@ def load_data():
         for uid,exp,tier in c.execute("SELECT uid,exp,tier FROM subs"):
             try: user_subscriptions[uid] = {"expiry":datetime.fromisoformat(exp) if exp else None,"tier":tier or "free"}
             except: pass
-        for uid,fn,ft in c.execute("SELECT uid,fn,ft FROM uf"):
-            user_files.setdefault(uid,[]).append((fn,ft))
+        try:
+            for row in c.execute("SELECT uid,fn,ft,project FROM uf"):
+                uid,fn,ft,proj = row
+                user_files.setdefault(uid,[]).append((fn,ft,proj))
+        except:
+            for uid,fn,ft in c.execute("SELECT uid,fn,ft FROM uf"):
+                user_files.setdefault(uid,[]).append((fn,ft,""))
         active_users.update(uid for uid, in c.execute("SELECT uid FROM au"))
         admin_ids.update(uid for uid, in c.execute("SELECT uid FROM adm"))
         conn.close()
@@ -331,15 +338,15 @@ def load_data():
 
 init_db(); load_data()
 
-def save_file(uid, fn, ft="py"):
+def save_file(uid, fn, ft="py", project=""):
     with DBL:
         conn = sqlite3.connect(DB_PATH, check_same_thread=False); c = conn.cursor()
         try:
-            c.execute("INSERT OR REPLACE INTO uf VALUES(?,?,?,?)", (uid,fn,ft,datetime.now().isoformat()))
+            c.execute("INSERT OR REPLACE INTO uf VALUES(?,?,?,?,?)", (uid,fn,ft,project,datetime.now().isoformat()))
             conn.commit()
             if uid not in user_files: user_files[uid]=[]
-            user_files[uid] = [(x,y) for x,y in user_files[uid] if x!=fn]
-            user_files[uid].append((fn,ft))
+            user_files[uid] = [(x,y,z) for x,y,z in user_files[uid] if x!=fn]
+            user_files[uid].append((fn,ft,project))
         except Exception as e: logger.error(f"Save file: {e}")
         finally: conn.close()
 
@@ -426,7 +433,7 @@ footer{{color:#555;text-align:center;padding:20px;font-size:.8rem}}
 <div class="col-md-10 p-4">
 <div class="d-flex justify-content-between align-items-center mb-4">
 <h3><i class="bi bi-speedometer2 me-2"></i>Management Dashboard</h3>
-<span class="badge-tg"><i class="bi bi-telegram me-1"></i>{BOT_USERNAME}</span>
+<span class="badge-tg"><i class="bi bi-telegram me-1"></i>{bu}</span>
 </div>
 <div class="row g-3 mb-4">
 <div class="col-md-3"><div class="card stat-card">
@@ -444,12 +451,12 @@ footer{{color:#555;text-align:center;padding:20px;font-size:.8rem}}
 <div class="col-md-4"><div class="card p-3"><h6><i class="bi bi-link me-2"></i>Referral Stats</h6>
 <div class="mt-2"><div>Referring: <strong>{ru}</strong></div><div>Auto-Restart: <strong>{are}</strong></div><div>Top: <strong>{top_ref} refs</strong></div></div></div></div>
 <div class="col-md-4"><div class="card p-3"><h6><i class="bi bi-cpu me-2"></i>System</h6>
-<div class="mt-2"><div>CPU: <strong>{cpu}%</strong></div><div>RAM: <strong>{ram_p}% ({ram_u}/{ram_t}GB)</strong></div><div>Bot: <span class="uptime-dot" style="background:{'#2ecc71' if not bot_locked else '#e74c3c'}"></span>{'Unlocked' if not bot_locked else 'Locked'}</div></div></div></div>
+<div class="mt-2"><div>CPU: <strong>{cpu}%</strong></div><div>RAM: <strong>{ram_p}% ({ram_u}/{ram_t}GB)</strong></div><div>Bot: <span class="uptime-dot" style="background:{bot_color}"></span>{bot_status}</div></div></div></div>
 </div>
 <div class="card p-3"><h6><i class="bi bi-activity me-2"></i>Active Users</h6>
 <div class="table-responsive mt-2"><table class="table table-dark table-hover"><thead><tr>
 <th>ID</th><th>Username</th><th>Tier</th><th>Files</th><th>Running</th><th>Referrals</th></tr></thead><tbody>{user_rows}</tbody></table></div></div>
-<footer>BLACK TITAN HOSTING BOT V4.0 | <a href="https://t.me/{BOT_USERNAME.replace('@','')}" class="text-white-50">@{BOT_USERNAME.replace('@','')}</a></footer>
+<footer>BLACK TITAN HOSTING BOT V4.0 | <a href="https://t.me/{bu_clean}" class="text-white-50">@{bu_clean}</a></footer>
 </div></div></div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script></body></html>"""
 
@@ -474,9 +481,12 @@ def web_dashboard():
         rn = sum(1 for f in user_files.get(uid,[]) if is_running(uid,f[0]))
         user_rows += f"<tr><td><code>{uid}</code></td><td>{un}</td><td>{t}</td><td>{fc}</td><td>{rn}</td><td>{rc}</td></tr>"
     if not user_rows: user_rows = "<tr><td colspan='6' class='text-muted'>No users</td></tr>"
+    bu = BOT_USERNAME; bu_clean = BOT_USERNAME.replace("@","")
+    bot_color = "#e74c3c" if bot_locked else "#2ecc71"
+    bot_status = "Locked" if bot_locked else "Unlocked"
     return PAGE_HTML.format(tu=tu,tf=tf,rs=rs,ruc=ruc,ru=ru,are=are,top_ref=top_ref,
             free_c=free_c,prem_c=prem_c,own_c=own_c,cpu=cpu,ram_u=ram_u,ram_t=ram_t,ram_p=ram_p,
-            bot_locked=bot_locked,user_rows=user_rows,BOT_USERNAME=BOT_USERNAME)
+            bot_color=bot_color,bot_status=bot_status,user_rows=user_rows,bu=bu,bu_clean=bu_clean)
 
 @flask_app.route("/health")
 def health():
@@ -515,7 +525,7 @@ FILES_PAGE = """<!DOCTYPE html><html lang="en"><head>
 <div class="container p-4">
 <h3 class="mb-4"><i class="bi bi-file-code me-2"></i>Files</h3>
 <div class="card p-3"><table class="table table-dark"><thead><tr>
-<th>User ID</th><th>File Name</th><th>Type</th><th>Status</th></tr></thead><tbody>{rows}</tbody></table></div>
+<th>User ID</th><th>File Name</th><th>Type</th><th>Project</th><th>Status</th></tr></thead><tbody>{rows}</tbody></table></div>
 <a href="/" class="btn btn-outline-light mt-3">Back</a>
 </div></body></html>"""
 
@@ -523,10 +533,12 @@ FILES_PAGE = """<!DOCTYPE html><html lang="en"><head>
 def web_files():
     rows = ""
     for uid, files in user_files.items():
-        for fn, ft in files:
+        for entry in files:
+            fn, ft = entry[0], entry[1]
+            proj = entry[2] if len(entry)==3 else ""
             st = "🟢 Running" if is_running(uid,fn) else "🔴 Stopped"
-            rows += f"<tr><td><code>{uid}</code></td><td>{fn}</td><td>{ft}</td><td>{st}</td></tr>"
-    if not rows: rows = "<tr><td colspan='4' class='text-muted'>No files</td></tr>"
+            rows += f"<tr><td><code>{uid}</code></td><td>{fn}</td><td>{ft}</td><td>{proj or '-'}</td><td>{st}</td></tr>"
+    if not rows: rows = "<tr><td colspan='5' class='text-muted'>No files</td></tr>"
     return FILES_PAGE.format(rows=rows)
 
 SCRIPTS_PAGE = """<!DOCTYPE html><html lang="en"><head>
@@ -754,7 +766,7 @@ def run_js(script_path, uid, folder, fn, msg):
     except Exception as e:
         bot.reply_to(msg, B(f"❌ {e}"))
 
-def handle_zip(content, fn, uid, folder, msg):
+def handle_zip(content, fn, uid, folder, msg, project=""):
     td = None
     try:
         td = tempfile.mkdtemp()
@@ -776,13 +788,46 @@ def handle_zip(content, fn, uid, folder, msg):
             s=os.path.join(td,item); d=os.path.join(folder,item)
             if os.path.isdir(s): shutil.copytree(s,d,dirs_exist_ok=True)
             else: shutil.copy2(s,d)
-        save_file(uid,main,ft)
+        save_file(uid,main,ft,project)
         fp = os.path.join(folder,main)
         if ft=="py": threading.Thread(target=run_py, args=(fp,uid,folder,main,msg)).start()
         else: threading.Thread(target=run_js, args=(fp,uid,folder,main,msg)).start()
     except Exception as e: bot.reply_to(msg, B(f"❌ ZIP error: {e}"))
     finally:
         if td and os.path.exists(td): shutil.rmtree(td)
+
+# ====== PROJECT SYSTEM ======
+user_state = {}  # {uid: {"action":"upload","project":"..."}}
+
+def get_project_folder(uid, project):
+    b = os.path.join(BASE_DIR, "bt_uploads", str(uid), project)
+    os.makedirs(b, exist_ok=True); return b
+
+def get_user_projects(uid):
+    pdir = os.path.join(BASE_DIR, "bt_uploads", str(uid))
+    if not os.path.exists(pdir): return []
+    return sorted([d for d in os.listdir(pdir) if os.path.isdir(os.path.join(pdir,d))])
+
+def project_files(uid, project):
+    pdir = get_project_folder(uid, project)
+    if not os.path.exists(pdir): return []
+    return sorted(os.listdir(pdir))
+
+def del_project(uid, project):
+    pdir = os.path.join(BASE_DIR, "bt_uploads", str(uid), project)
+    if os.path.exists(pdir): shutil.rmtree(pdir)
+    # remove from user_files
+    if uid in user_files:
+        user_files[uid] = [x for x in user_files[uid] if x[0] != project]
+
+@bot.message_handler(func=lambda m: user_state.get(m.from_user.id,{}).get("action")=="await_project" and m.text)
+def handle_project_name(msg):
+    uid = msg.from_user.id; pn = msg.text.strip().replace("/","_").replace(" ","_")[:30]
+    if not pn: bot.reply_to(msg, B("⚠️ Invalid project name.")); return
+    get_project_folder(uid, pn)
+    user_state[uid] = {"action":"upload","project":pn}
+    bot.reply_to(msg, B(f"📁 Project `{pn}` set. Send .py, .js, or .zip files."),
+                 reply_markup=types.ForceReply(selective=False))
 
 # ====== COMMANDS ======
 @bot.message_handler(commands=["start"])
@@ -959,6 +1004,24 @@ def cmd_rb(msg):
     os.execv(sys.executable, ["python"]+sys.argv)
 
 # ====== FILE HANDLER ======
+def start_upload(msg):
+    uid = msg.from_user.id
+    st = user_state.get(uid,{})
+    if st.get("action")=="upload" and st.get("project"):
+        bot.reply_to(msg, B(f"📁 Send file for project `{st['project']}` (.py, .js, .zip)"))
+        return
+    projects = get_user_projects(uid)
+    if projects:
+        mk = types.InlineKeyboardMarkup(row_width=2)
+        for p in projects[:10]:
+            mk.add(types.InlineKeyboardButton(B(f"📁 {p}"), callback_data=f"useproj_{p}"))
+        mk.add(types.InlineKeyboardButton(B("➕ New Project"), callback_data="newproj"))
+        mk.add(types.InlineKeyboardButton(B("🔙 Back"), callback_data="back"))
+        bot.reply_to(msg, B("📁 Select project or create new:"), reply_markup=mk)
+    else:
+        user_state[uid] = {"action":"await_project"}
+        bot.reply_to(msg, B("📝 Send a project name to start:"))
+
 @bot.message_handler(content_types=["document"])
 def handle_file(msg):
     uid = msg.from_user.id
@@ -966,6 +1029,10 @@ def handle_file(msg):
     if bot_locked and uid not in admin_ids: bot.reply_to(msg, B("⚠️ Bot locked.")); return
     if file_count(uid) >= file_limit(uid):
         bot.reply_to(msg, B(f"⚠️ Limit ({file_count(uid)}/{file_limit(uid)}).")); return
+    st = user_state.get(uid,{})
+    proj = st.get("project","") if st.get("action")=="upload" else ""
+    if not proj:
+        bot.reply_to(msg, B("⚠️ First select a project via 📤 Upload.")); return
     doc = msg.document
     if not doc.file_name: bot.reply_to(msg, B("⚠️ No file name.")); return
     ext = os.path.splitext(doc.file_name)[1].lower()
@@ -973,16 +1040,16 @@ def handle_file(msg):
     animate(msg, ANIM_UPLD)
     try:
         fi = bot.get_file(doc.file_id); dl = bot.download_file(fi.file_path)
-        folder = get_folder(uid); fp = os.path.join(folder, doc.file_name)
+        folder = get_project_folder(uid, proj); fp = os.path.join(folder, doc.file_name)
         with open(fp,"wb") as f: f.write(dl)
         if ext==".zip":
-            save_file(uid, doc.file_name, "zip")
-            handle_zip(dl, doc.file_name, uid, folder, msg)
+            save_file(uid, doc.file_name, "zip", proj)
+            handle_zip(dl, doc.file_name, uid, folder, msg, proj)
         elif ext==".py":
-            save_file(uid, doc.file_name, "py")
+            save_file(uid, doc.file_name, "py", proj)
             threading.Thread(target=run_py, args=(fp,uid,folder,doc.file_name,msg)).start()
         elif ext==".js":
-            save_file(uid, doc.file_name, "js")
+            save_file(uid, doc.file_name, "js", proj)
             threading.Thread(target=run_js, args=(fp,uid,folder,doc.file_name,msg)).start()
     except Exception as e:
         bot.reply_to(msg, B(f"❌ Upload error: {e}"))
@@ -994,7 +1061,7 @@ def reg_handlers():
     H = {
         B("📢 Updates"): lambda m: bot.reply_to(m, f"📢 {UPDATE_CHANNEL}\n👥 {UPDATE_GROUP}"),
         B("👥 Group"): lambda m: bot.reply_to(m, f"👥 {UPDATE_GROUP}"),
-        B("📤 Upload"): lambda m: bot.reply_to(m, B("📤 Send .py, .js, or .zip")),
+        B("📤 Upload"): lambda m: start_upload(m),
         B("📂 My Files"): lambda m: show_files(m),
         B("⚡ Speed"): lambda m: check_sp(m),
         B("📊 Stats"): lambda m: cmd_stats(m),
@@ -1017,11 +1084,16 @@ def handle_btn(m): H[m.text](m)
 def show_files(msg):
     uid = msg.from_user.id; files = user_files.get(uid,[])
     if not files: bot.reply_to(msg, B("📭 No files.")); return
+    projects = {}
+    for entry in files:
+        fn, ft, proj = entry if len(entry)==3 else (entry[0], entry[1], "")
+        projects.setdefault(proj,[]).append((fn,ft))
     mk = types.InlineKeyboardMarkup(row_width=1)
-    for fn,ft in files:
-        ir = is_running(uid,fn)
-        mk.add(types.InlineKeyboardButton(B(f"{'🟢' if ir else '🔴'} {fn} ({ft})"), callback_data=f"fil_{uid}_{fn}"))
-    bot.reply_to(msg, B("📂 Your Files:"), reply_markup=mk)
+    for proj in sorted(projects):
+        pf = projects[proj]
+        label = f"📁 {proj} ({len(pf)} files)" if proj else f"📂 General ({len(pf)} files)"
+        mk.add(types.InlineKeyboardButton(B(label), callback_data=f"proj_{uid}_{proj or '_'}"))
+    bot.reply_to(msg, B("📂 Your Projects:"), reply_markup=mk)
 
 def check_sp(msg):
     s = time.time(); m = bot.reply_to(msg, B("🏃 Checking..."))
@@ -1078,7 +1150,12 @@ def cb(c):
     try:
         if d=="upload":
             if file_count(uid)>=file_limit(uid): bot.answer_callback_query(c.id, B("⚠️ Limit reached"), show_alert=True); return
-            bot.answer_callback_query(c.id); bot.send_message(c.message.chat.id, B("📤 Send .py/.js/.zip"))
+            bot.answer_callback_query(c.id); start_upload(c.message)
+        elif d.startswith("proj_"): cb_proj_files(c)
+        elif d.startswith("useproj_"): cb_use_proj(c)
+        elif d=="newproj":
+            user_state[uid] = {"action":"await_project"}
+            bot.answer_callback_query(c.id); bot.send_message(c.message.chat.id, B("📝 Send a project name:"))
         elif d=="check_files": cb_files(c)
         elif d.startswith("fil_"): cb_file_ctrl(c)
         elif d.startswith("sta_"): cb_start(c)
@@ -1111,21 +1188,54 @@ def cb(c):
         else: bot.answer_callback_query(c.id,"❌ Unknown")
     except Exception as e: logger.error(f"CB err: {e}"); bot.answer_callback_query(c.id,"❌ Error")
 
+def cb_proj_files(c):
+    try:
+        p = c.data.split("_", 2); uid = int(p[1]); proj = p[2].replace("_","")
+        if c.from_user.id != uid and c.from_user.id not in admin_ids:
+            bot.answer_callback_query(c.id, B("⚠️ Denied"), show_alert=True); return
+        files = user_files.get(uid,[])
+        pfiles = [x for x in files if (x[2] if len(x)==3 else "")==proj or (not proj and len(x)==2)]
+        mk = types.InlineKeyboardMarkup(row_width=1)
+        for entry in pfiles:
+            fn, ft = entry[0], entry[1]
+            ir = is_running(uid, fn)
+            mk.add(types.InlineKeyboardButton(B(f"{'🟢' if ir else '🔴'} {fn} ({ft})"), callback_data=f"fil_{uid}_{fn}"))
+        mk.add(types.InlineKeyboardButton(B("🔙 Back"), callback_data="check_files"))
+        bot.answer_callback_query(c.id)
+        bot.edit_message_text(B(f"📁 {proj or 'General'}:"), c.message.chat.id, c.message.message_id, reply_markup=mk)
+    except Exception as e: logger.error(f"Proj files err: {e}")
+
+def cb_use_proj(c):
+    try:
+        proj = c.data.split("_", 1)[1]
+        uid = c.from_user.id
+        user_state[uid] = {"action":"upload","project":proj}
+        bot.answer_callback_query(c.id, B(f"✅ Project: {proj}"), show_alert=True)
+        bot.send_message(c.message.chat.id, B(f"📁 Project `{proj}` set. Send .py, .js, or .zip."))
+    except Exception as e: logger.error(f"Use proj err: {e}")
+
 def cb_files(c):
     uid = c.from_user.id; files = user_files.get(uid,[])
     if not files: bot.answer_callback_query(c.id,B("📭 No files"),show_alert=True); return
+    projects = {}
+    for entry in files:
+        fn, ft, proj = entry if len(entry)==3 else (entry[0], entry[1], "")
+        projects.setdefault(proj,[]).append((fn,ft))
     mk = types.InlineKeyboardMarkup(row_width=1)
-    for fn,ft in files:
-        mk.add(types.InlineKeyboardButton(B(f"{'🟢' if is_running(uid,fn) else '🔴'} {fn} ({ft})"), callback_data=f"fil_{uid}_{fn}"))
+    for proj in sorted(projects):
+        pf = projects[proj]
+        label = f"📁 {proj} ({len(pf)} files)" if proj else f"📂 General ({len(pf)} files)"
+        mk.add(types.InlineKeyboardButton(B(label), callback_data=f"proj_{uid}_{proj or '_'}"))
     mk.add(types.InlineKeyboardButton(B("🔙 Back"), callback_data="back"))
-    bot.answer_callback_query(c.id); bot.edit_message_text(B("📂 Files:"), c.message.chat.id, c.message.message_id, reply_markup=mk)
+    bot.answer_callback_query(c.id); bot.edit_message_text(B("📂 Your Projects:"), c.message.chat.id, c.message.message_id, reply_markup=mk)
 
 def cb_file_ctrl(c):
     try:
         p=c.data.split("_"); uid=int(p[1]); fn="_".join(p[2:])
         if c.from_user.id!=uid and c.from_user.id not in admin_ids: bot.answer_callback_query(c.id,B("⚠️ Denied"),show_alert=True); return
         fi=None
-        for f,ft in user_files.get(uid,[]):
+        for entry in user_files.get(uid,[]):
+            f,ft = entry[0], entry[1]
             if f==fn: fi=(f,ft); break
         if not fi: bot.answer_callback_query(c.id,B("❌ Not found"),show_alert=True); return
         ir=is_running(uid,fn)
@@ -1138,11 +1248,14 @@ def cb_start(c):
         p=c.data.split("_"); uid=int(p[1]); fn="_".join(p[2:])
         if c.from_user.id!=uid and c.from_user.id not in admin_ids: bot.answer_callback_query(c.id,B("⚠️ Denied"),show_alert=True); return
         if is_running(uid,fn): bot.answer_callback_query(c.id,B("✅ Already running"),show_alert=True); return
-        fo=get_folder(uid); fp=os.path.join(fo,fn)
-        if not os.path.exists(fp): bot.answer_callback_query(c.id,B("❌ Not found"),show_alert=True); return
-        ft="py"
-        for f,ft2 in user_files.get(uid,[]):
+        proj=""; ft="py"
+        for entry in user_files.get(uid,[]):
+            f,ft2 = entry[0], entry[1]
+            if entry[2] if len(entry)==3 else "": proj=entry[2]
             if f==fn: ft=ft2; break
+        fo = get_project_folder(uid, proj) if proj else get_folder(uid)
+        fp=os.path.join(fo,fn)
+        if not os.path.exists(fp): bot.answer_callback_query(c.id,B("❌ Not found"),show_alert=True); return
         bot.answer_callback_query(c.id,B("🚀 Starting..."))
         if ft=="py": threading.Thread(target=run_py,args=(fp,uid,fo,fn,c.message)).start()
         else: threading.Thread(target=run_js,args=(fp,uid,fo,fn,c.message)).start()
@@ -1159,6 +1272,12 @@ def cb_stop(c):
         bot.edit_message_reply_markup(c.message.chat.id,c.message.message_id,reply_markup=ctrl_btns(uid,fn,False))
     except Exception as e: logger.error(f"Stop err: {e}")
 
+def _get_proj_for_file(uid, fn):
+    for entry in user_files.get(uid,[]):
+        if entry[0]==fn:
+            return entry[2] if len(entry)==3 else ""
+    return ""
+
 def cb_rst(c):
     try:
         p=c.data.split("_"); uid=int(p[1]); fn="_".join(p[2:])
@@ -1167,11 +1286,12 @@ def cb_rst(c):
             k=f"{uid}_{fn}"
             if k in bot_scripts: kill_proc(bot_scripts[k]); del bot_scripts[k]
             time.sleep(1)
-        fo=get_folder(uid); fp=os.path.join(fo,fn)
+        proj=_get_proj_for_file(uid,fn); fo=get_project_folder(uid,proj) if proj else get_folder(uid)
+        fp=os.path.join(fo,fn)
         if not os.path.exists(fp): bot.answer_callback_query(c.id,B("❌ Not found"),show_alert=True); return
         ft="py"
-        for f,ft2 in user_files.get(uid,[]):
-            if f==fn: ft=ft2; break
+        for entry in user_files.get(uid,[]):
+            if entry[0]==fn: ft=entry[1]; break
         bot.answer_callback_query(c.id,B("🔄 Restarting..."))
         if ft=="py": threading.Thread(target=run_py,args=(fp,uid,fo,fn,c.message)).start()
         else: threading.Thread(target=run_js,args=(fp,uid,fo,fn,c.message)).start()
@@ -1184,7 +1304,8 @@ def cb_del(c):
         if is_running(uid,fn):
             k=f"{uid}_{fn}"
             if k in bot_scripts: kill_proc(bot_scripts[k]); del bot_scripts[k]
-        fo=get_folder(uid); fp=os.path.join(fo,fn); lp=os.path.join(fo,f"{os.path.splitext(fn)[0]}.log")
+        proj=_get_proj_for_file(uid,fn); fo=get_project_folder(uid,proj) if proj else get_folder(uid)
+        fp=os.path.join(fo,fn); lp=os.path.join(fo,f"{os.path.splitext(fn)[0]}.log")
         if os.path.exists(fp): os.remove(fp)
         if os.path.exists(lp): os.remove(lp)
         del_file(uid,fn)
@@ -1196,7 +1317,8 @@ def cb_log(c):
     try:
         p=c.data.split("_"); uid=int(p[1]); fn="_".join(p[2:])
         if c.from_user.id!=uid and c.from_user.id not in admin_ids: bot.answer_callback_query(c.id,B("⚠️ Denied"),show_alert=True); return
-        fo=get_folder(uid); lp=os.path.join(fo,f"{os.path.splitext(fn)[0]}.log")
+        proj=_get_proj_for_file(uid,fn); fo=get_project_folder(uid,proj) if proj else get_folder(uid)
+        lp=os.path.join(fo,f"{os.path.splitext(fn)[0]}.log")
         if not os.path.exists(lp): bot.answer_callback_query(c.id,B("📭 No logs"),show_alert=True); return
         with open(lp,encoding="utf-8",errors="ignore") as f: lc=f.read()
         if len(lc)>3000: lc="...\n"+lc[-3000:]
