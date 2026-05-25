@@ -391,6 +391,15 @@ def run_flask():
 Thread(target=run_flask, daemon=True).start()
 print("✅ Management Dashboard started.")
 
+def reply_kb(uid):
+    mk = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    btns = ["📤 Upload Bot","📂 My Bots","📊 Stats","👤 Profile","🤝 Referral","🏆 Leaderboard","📢 Updates","📞 Contact"]
+    if uid in ADMIN_IDS or uid == OWNER_ID:
+        btns += ["👑 Admin Panel","📢 Broadcast"]
+    for i in range(0, len(btns), 2):
+        mk.add(*[types.KeyboardButton(t) for t in btns[i:i+2]])
+    return mk
+
 def main_markup(uid):
     mk=types.InlineKeyboardMarkup(row_width=2)
     btns=[
@@ -498,6 +507,7 @@ def cmd_start(message):
 💬 Support: {SUPPORT_LINK}
     """
     bot.send_message(message.chat.id, txt, reply_markup=main_markup(uid))
+    bot.send_message(message.chat.id, B("📌 Use buttons below:"), reply_markup=reply_kb(uid))
 
 @bot.message_handler(commands=['help'])
 def cmd_help(message):
@@ -616,6 +626,40 @@ def set_project(message):
     if len(parts)<2: bot.reply_to(message,B("Usage: /setproject <name>")); return
     user_projects[uid]=parts[1].strip()
     bot.reply_to(message,B(f"📁 Project set: `{parts[1]}`"))
+
+@bot.message_handler(func=lambda m: m.text in ["📤 Upload Bot","📂 My Bots","📊 Stats","👤 Profile","🤝 Referral","🏆 Leaderboard","📢 Updates","📞 Contact","👑 Admin Panel","📢 Broadcast"])
+def handle_kb_btn(message):
+    uid = message.from_user.id; txt = message.text
+    if txt == "📂 My Bots":
+        files = get_user_files(uid)
+        if not files: bot.reply_to(message, B("📭 No files."), reply_markup=reply_kb(uid)); return
+        msg = B("📂 Your Bots\n")
+        for f in files:
+            ru = is_running(uid, f['filename'])
+            msg += f"{'🟢' if ru else '🔴'} `{f['filename']}`\n"
+        bot.reply_to(message, msg)
+    elif txt == "📊 Stats":
+        bot.reply_to(message, f"👥 Users: {db.fetch_one('SELECT COUNT(*) as c FROM users')['c']}\n🤖 Running: {sum(1 for k,v in bot_scripts.items() if is_running(v['uid'],v['fn']))}")
+    elif txt == "👤 Profile":
+        tb = get_tier_benefits(uid); fc = get_file_count(uid)
+        bot.reply_to(message, B(f"🎫 {tb.icon} {tb.name}\n📁 Files: {fc}/{tb.upload_limit}\n🔄 Auto-Restart: {'✅' if tb.auto_restart else '❌'}"))
+    elif txt == "🤝 Referral":
+        u = db.fetch_one("SELECT referral_code FROM users WHERE user_id=?", (uid,))
+        rc = u['referral_code'] if u else ""
+        bot.reply_to(message, B(f"🔗 https://t.me/{BOT_USERNAME.replace('@','')}?start={rc}"))
+    elif txt == "🏆 Leaderboard":
+        lb = ReferralManager.leaderboard()
+        msg = B("🏆 Leaderboard\n")
+        for i, u in enumerate(lb[:10], 1): msg += f"{i}. {u.get('username','?')} - {u['referral_count']}\n"
+        bot.reply_to(message, msg)
+    elif txt == "📢 Updates":
+        bot.reply_to(message, B(f"📢 {UPDATE_CHANNEL}"))
+    elif txt == "📞 Contact":
+        bot.reply_to(message, B(f"📞 {BOT_USERNAME}"))
+    elif txt == "👑 Admin Panel" and uid in ADMIN_IDS:
+        bot.reply_to(message, B("👑 Admin Panel"), reply_markup=admin_mk())
+    elif txt == "📢 Broadcast" and uid in ADMIN_IDS:
+        bot.reply_to(message, B("Usage: /broadcast <message>"))
 
 @bot.message_handler(func=lambda m: m.text and m.text.startswith('/'))
 def handle_cmd(message):
