@@ -1646,15 +1646,7 @@ if __name__=="__main__":
     print(f"👥 Users: {len(active_users)}")
     print("="*50)
     threading.Thread(target=lambda: bot.send_message(OWNER_ID, B("🚀 BLACK TITAN HOSTING BOT STARTED! ✅"))).start()
+    # infinity_polling handles retries internally with relax seconds between errors
     while True:
-        try:
-            bot.polling(timeout=60, long_polling_timeout=30, non_stop=False)
-        except telebot.apihelper.ApiTelegramException as e:
-            if "409" in str(e):
-                logger.warning("⚠️ 409 Conflict - waiting 60s...")
-                time.sleep(60)
-            else: time.sleep(15)
-        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError): time.sleep(10)
-        except Exception as e:
-            logger.critical(f"Poll err: {e}", exc_info=True)
-            time.sleep(30)
+        try: bot.infinity_polling(timeout=60, long_polling_timeout=30, relax=30)
+        except: time.sleep(60)
