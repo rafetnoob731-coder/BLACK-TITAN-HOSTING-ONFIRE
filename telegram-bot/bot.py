@@ -766,38 +766,54 @@ def run_js(script_path, uid, folder, fn, msg):
     except Exception as e:
         bot.reply_to(msg, B(f"❌ {e}"))
 
+def _find_req_txt(root):
+    for dirpath, _, fns in os.walk(root):
+        for f in fns:
+            if f.lower() == "requirements.txt":
+                return os.path.join(dirpath, f)
+    return None
+
 def handle_zip(content, fn, uid, folder, msg, project=""):
     td = None
     try:
         td = tempfile.mkdtemp()
         with open(os.path.join(td,fn),"wb") as f: f.write(content)
         with zipfile.ZipFile(os.path.join(td,fn)) as z: z.extractall(td)
-        files = os.listdir(td)
-        # install requirements.txt if present
-        if "requirements.txt" in files:
+        # install requirements.txt if found anywhere
+        req = _find_req_txt(td)
+        if req:
             bot.reply_to(msg, B("🐍 Installing requirements.txt..."))
-            subprocess.run([sys.executable,"-m","pip","install","-r",os.path.join(td,"requirements.txt"),"--quiet"],
-                         capture_output=True, text=True)
-        # copy all files to project folder
-        for item in files:
-            s=os.path.join(td,item); d=os.path.join(folder,item)
-            if os.path.isdir(s): shutil.copytree(s,d,dirs_exist_ok=True)
-            else: shutil.copy2(s,d)
+            r = subprocess.run([sys.executable,"-m","pip","install","-r",req], capture_output=True, text=True)
+            if r.returncode==0: bot.reply_to(msg, B("✅ Dependencies installed."))
+            else: bot.reply_to(msg, B(f"⚠️ pip issue:\n{r.stderr[:200]}"))
+        # collect all files recursively before copying
+        all_files = []
+        for dirpath, _, fns in os.walk(td):
+            for f in fns:
+                fp = os.path.join(dirpath, f)
+                rel = os.path.relpath(fp, td)
+                if rel.startswith(".."): continue
+                all_files.append((fp, rel))
+        # copy all files preserving structure
+        for src, rel in all_files:
+            dst = os.path.join(folder, rel)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copy2(src, dst)
         # save all .py and .js files
         saved = []
-        for f in files:
-            if f.endswith(".py"):
-                save_file(uid, f, "py", project)
-                saved.append(f)
-            elif f.endswith(".js"):
-                save_file(uid, f, "js", project)
-                saved.append(f)
+        for _, rel in all_files:
+            if rel.endswith(".py"):
+                save_file(uid, rel, "py", project)
+                saved.append(rel)
+            elif rel.endswith(".js"):
+                save_file(uid, rel, "js", project)
+                saved.append(rel)
         # find and auto-start main file
         py = [f for f in saved if f.endswith(".py")]
         js = [f for f in saved if f.endswith(".js")]
         main = None; ft = None
         for n in ["main.py","bot.py","app.py"]:
-            if n in py: main=n; ft="py"; break
+            if n in saved: main=n; ft="py"; break
         if not main and py: main=py[0]; ft="py"
         elif not main and js:
             for n in ["index.js","main.js","bot.js"]:
