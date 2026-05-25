@@ -1108,7 +1108,8 @@ def show_files(msg):
     for proj in sorted(projects):
         pf = projects[proj]
         label = f"📁 {proj} ({len(pf)} files)" if proj else f"📂 General ({len(pf)} files)"
-        mk.add(types.InlineKeyboardButton(B(label), callback_data=f"proj_{uid}_{proj or '_'}"))
+        enc = proj if proj else "_"
+        mk.add(types.InlineKeyboardButton(B(label), callback_data=f"proj_{uid}_{enc}"))
     bot.reply_to(msg, B("📂 Your Projects:"), reply_markup=mk)
 
 def check_sp(msg):
@@ -1206,14 +1207,16 @@ def cb(c):
 
 def cb_proj_files(c):
     try:
-        p = c.data.split("_", 2); uid = int(p[1]); proj = p[2].replace("_","")
+        p = c.data.split("_"); uid = int(p[1]); proj = "_".join(p[2:])
+        if proj == "_": proj = ""
         if c.from_user.id != uid and c.from_user.id not in admin_ids:
             bot.answer_callback_query(c.id, B("⚠️ Denied"), show_alert=True); return
         files = user_files.get(uid,[])
-        pfiles = [x for x in files if (x[2] if len(x)==3 else "")==proj or (not proj and len(x)==2)]
+        pfiles = [(x[0],x[1]) for x in files if (x[2] if len(x)==3 else "")==proj]
+        if not pfiles and not proj:
+            pfiles = [(x[0],x[1]) for x in files if len(x)==2]
         mk = types.InlineKeyboardMarkup(row_width=1)
-        for entry in pfiles:
-            fn, ft = entry[0], entry[1]
+        for fn, ft in pfiles:
             ir = is_running(uid, fn)
             mk.add(types.InlineKeyboardButton(B(f"{'🟢' if ir else '🔴'} {fn} ({ft})"), callback_data=f"fil_{uid}_{fn}"))
         mk.add(types.InlineKeyboardButton(B("🔙 Back"), callback_data="check_files"))
@@ -1241,7 +1244,8 @@ def cb_files(c):
     for proj in sorted(projects):
         pf = projects[proj]
         label = f"📁 {proj} ({len(pf)} files)" if proj else f"📂 General ({len(pf)} files)"
-        mk.add(types.InlineKeyboardButton(B(label), callback_data=f"proj_{uid}_{proj or '_'}"))
+        enc = proj if proj else "_"
+        mk.add(types.InlineKeyboardButton(B(label), callback_data=f"proj_{uid}_{enc}"))
     mk.add(types.InlineKeyboardButton(B("🔙 Back"), callback_data="back"))
     bot.answer_callback_query(c.id); bot.edit_message_text(B("📂 Your Projects:"), c.message.chat.id, c.message.message_id, reply_markup=mk)
 
@@ -1630,4 +1634,9 @@ if __name__=="__main__":
         try: bot.infinity_polling(timeout=60, long_polling_timeout=30)
         except requests.exceptions.ReadTimeout: time.sleep(5)
         except requests.exceptions.ConnectionError: time.sleep(15)
+        except telebot.apihelper.ApiTelegramException as e:
+            if "409" in str(e):
+                logger.warning("⚠️ 409 Conflict - another bot instance running. Retrying in 60s...")
+                time.sleep(60)
+            else: logger.critical(f"API Error: {e}", exc_info=True); time.sleep(30)
         except Exception as e: logger.critical(f"Fatal: {e}", exc_info=True); time.sleep(30)
